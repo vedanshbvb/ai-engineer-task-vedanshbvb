@@ -47,4 +47,11 @@ This project provides a Gradio-based UI for uploading multiple documents (.docx,
    python frontend/app.py
    ```
 
-3. Upload your documents and review the results.
+3. Upload documents to the VectorStore
+
+    For this you must go to the links in the Data Source pdf
+
+
+    ```
+    python -m streamlit run streamlit_frontend/app.py
+    ```
