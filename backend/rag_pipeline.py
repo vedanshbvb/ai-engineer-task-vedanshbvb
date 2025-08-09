@@ -21,7 +21,9 @@ VECTORSTORE_PATH = os.path.join("data", "vectorstore")
 # ----------------- Load FAISS -----------------
 def load_faiss_vectorstore():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    return FAISS.load_local(VECTORSTORE_PATH, embeddings)
+    # return FAISS.load_local(VECTORSTORE_PATH, embeddings)
+    return FAISS.load_local(VECTORSTORE_PATH, embeddings, allow_dangerous_deserialization=True)
+
 
 # ----------------- Extractors -----------------
 def extract_text_from_docx(path):
@@ -43,7 +45,7 @@ def chunk_text(text, chunk_size=800, chunk_overlap=100):
 # ----------------- Gemini Call -----------------
 def call_gemini(user_chunk, references):
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = "gemini-2.5-pro"
+    model = "gemini-1.5-flash"
 
     prompt = (
         "You are a compliance assistant. Compare the following user document chunk to the reference clauses below. "
