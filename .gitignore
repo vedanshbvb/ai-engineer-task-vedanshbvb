@@ -1,2 +1,5 @@
 .env
 data/raw/uploaded/
+backend/rag_pipeline.py
+backend/rag_pipeline.pyc
+data/processed/
