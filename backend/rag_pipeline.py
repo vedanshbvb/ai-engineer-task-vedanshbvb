@@ -115,10 +115,12 @@ def call_gemini_combined(user_docs: str, references: str) -> str:
     Red Flag Detection Features
         • Invalid or missing clauses
         • Incorrect jurisdiction (e.g., referencing UAE Federal Courts instead of ADGM)
-        • Ambiguous or non-binding language
+        • Ambiguous or non-binding language like "today", "tomorrow", "maybe" 
         • Missing signatory sections or improper formatting
         • Non-compliance with ADGM-specific templates
         • Missing documents
+        • Unresolved placeholders, for example if the doc contains something like {{name}} or {{company}}
+        
 
     So you must identify missing documents, issues in the user documents, their severity and your suggestion to fix it.
 
@@ -172,6 +174,7 @@ def call_gemini_combined(user_docs: str, references: str) -> str:
 
 
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+    # print(references)
 
     response_text = ""
     for chunk in client.models.generate_content_stream(model=model, contents=contents):
@@ -213,6 +216,7 @@ def review_documents(filepaths: List[str]) -> str:
     references_combined = "\n---\n".join(list(set(ref_texts)))  # deduplicate
 
     # Single Gemini call
+    # print(references_combined)
     issues_json = call_gemini_combined(combined_text, references_combined)
 
     # return issues_json
