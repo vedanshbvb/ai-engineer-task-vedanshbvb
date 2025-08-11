@@ -45,15 +45,63 @@ def chunk_text(text, chunk_size=800, chunk_overlap=100):
 # ----------------- Gemini Call -----------------
 def call_gemini(user_chunk, references):
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = "gemini-1.5-flash"
+    model = "gemini-2.0-flash"
 
     prompt = (
-        "You are a compliance assistant. Compare the following user document chunk to the reference clauses below. "
-        "Identify any compliance issues, missing elements, or suggestions for improvement. "
-        "Be concise and specific.\n\n"
-        f"User Document Chunk:\n{user_chunk}\n\n"
-        f"Reference Clauses:\n{references}\n\n"
-        "Issues and Suggestions:"
+        f"""
+        You are a compliance assistant. Compare the following user document chunk to the reference clauses below. 
+        Identify what is the type of ADGM(Abu Dhabi Global Market) document the user has sent (for example, application form, mou) and also identify what is the user trying to do, for example, company formation, employment contract etc etc. What other documents does the user need to provide to complete the process? 
+
+        
+        For example, if a user wants to form a company, they will need the following documents:
+        1. Articles of Association
+        2. Memorandum of Association
+        3. Board Resolution
+        4. Shareholder Resolution
+        5. Incorporation Application Form
+        6. UBO Declaration form
+        7. Register of Members and Directors
+        8. Change of Registered Address Notice
+        
+
+        Be concise and specific.\n\n
+        User Document Chunk:\n{user_chunk}\n\n
+        Reference Clauses:\n{references}\n\n
+
+        Identify any compliance issues, missing elements or documents such as these:
+
+        Red Flag Detection Features
+            • Invalid or missing clauses
+            • Incorrect jurisdiction (e.g., referencing UAE Federal Courts instead of ADGM)
+            • Ambiguous or non-binding language
+            • Missing signatory sections or improper formatting
+            • Non-compliance with ADGM-specific templates
+            • Missing documents
+
+        So you must identify missing documents, issues in the user documents, their severity and your suggestion to fix it.
+
+        Your answer must STRICTLY be in json format
+        For example:
+            {{
+                "process": "Company Incorporation",
+                "documents_uploaded": 4,
+                "required_documents": 5,
+                "missing_document": "Register of Members and Directors",
+                "issues_found": 
+                [
+                    {{
+                        "document": "Articles of Association",
+                        "section": "Clause 3.1",
+                        "issue": "Jurisdiction clause does not specify ADGM",
+                        "severity": "High",
+                        "suggestion": "Update jurisdiction to ADGM Courts."
+                    }}
+                ]
+            }}
+        """
+
+
+
     )
 
     contents = [
