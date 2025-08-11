@@ -1,9 +1,7 @@
-# gradio_frontend/app.py  -> now Streamlit
 import streamlit as st
 import os
 import sys
 from pathlib import Path
-
 
 # Ensure backend is importable
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -27,37 +25,28 @@ if st.button("Review Documents"):
     else:
         filepaths = []
         os.makedirs("data/raw/uploaded", exist_ok=True)
-        
+
         for uploaded_file in uploaded_files:
             temp_path = os.path.join("data", "raw", "uploaded", uploaded_file.name)
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             filepaths.append(temp_path)
-        
-        # st.info("🔍 Reviewing documents...")
+
+        # Placeholder for status updates
         status = st.empty()
         status.info("🔍 Reviewing documents...")
 
+        # Step 1: Review documents
         result = review_documents(filepaths)
+        status.info("✅ Issues identified, editing documents...")
 
-        st.subheader("Detected Issues & Suggestions")
-        # st.text_area("Results", result, height=500)
-        st.json(result)
+        # Placeholder for downloads ABOVE issues
+        download_placeholder = st.container()
 
-        print("\n\n\n\ngemini stuff done")
-        status.info("Issues identified")
-
-        print(type(result))
-        print(result)
-
-        #only process docx files with issues
+        # Step 2: Process DOCX files for highlighting & commenting
+        reviewed_files = []
         if isinstance(result, dict) and result.get("issues_found"):
-            print("###########inside###########")
             for filepath in filepaths:
-
-                print("-------------------------------------------------------------------")
-                print(f"working for {filepath}")
-
                 if filepath.lower().endswith(".docx"):
                     reviewed_path = os.path.join(
                         "data", "raw", "uploaded", f"reviewed_{os.path.basename(filepath)}"
@@ -71,21 +60,27 @@ if st.button("Review Documents"):
                         or i.get("document", "").lower() in filename_no_ext
                     ]
 
-                    print(f"{filepath} {reviewed_path} {file_issues}")
-
                     has_update = highlight_and_comment_docx(filepath, reviewed_path, file_issues)
 
                     if has_update:
-                        with open(reviewed_path, "rb") as f:
-                            st.download_button(
-                                label=f"⬇️ Download Reviewed {os.path.basename(filepath)}",
-                                data=f,
-                                file_name=os.path.basename(reviewed_path),
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            )
+                        reviewed_files.append(reviewed_path)
 
-        status.info("Your documents have been edited, with highlighting the problematic part along with comments about how to set it right")
+        # Step 3: Show download buttons (above issues)
+        if reviewed_files:
+            with download_placeholder:
+                st.subheader("📥 Download Edited Files")
+                for reviewed_path in reviewed_files:
+                    with open(reviewed_path, "rb") as f:
+                        st.download_button(
+                            label=f"⬇️ Download Reviewed {os.path.basename(reviewed_path)}",
+                            data=f,
+                            file_name=os.path.basename(reviewed_path),
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            use_container_width=True
+                        )
 
+        # Step 4: Show detected issues & suggestions
+        st.subheader("Detected Issues & Suggestions")
+        st.json(result)
 
-
-    
+        status.info("✅ Your documents have been edited and are ready for download.")
