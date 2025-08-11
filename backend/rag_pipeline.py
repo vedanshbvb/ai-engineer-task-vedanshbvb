@@ -8,6 +8,10 @@ import PyPDF2
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+import json
+from docx.shared import Pt
+from docx.enum.text import WD_COLOR_INDEX
+import re
 
 load_dotenv()
 
@@ -35,6 +39,47 @@ def extract_text_from_pdf(path) -> str:
 def chunk_text(text: str, chunk_size=800, chunk_overlap=100):
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     return splitter.split_text(text)
+
+# ----------------- Editing user docs -----------------
+def highlight_and_comment_docx(input_path: str, output_path: str, issues: list):
+    """
+    Highlights and adds inline comments to a DOCX file wherever issues are found.
+    Saves the updated document to output_path.
+    Matching is case-insensitive and allows partial matches.
+    """
+    if not issues:
+        return False
+
+    doc = DocxDocument(input_path)
+    updated = False
+
+    for issue in issues:
+        keyword = issue.get("section") or issue.get("issue")
+        if not keyword:
+            continue
+
+        # Build comment text
+        comment_text = f"[COMMENT: {issue.get('suggestion', '')}]"
+
+        # Case-insensitive keyword search in paragraphs
+        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+
+        for para in doc.paragraphs:
+            if pattern.search(para.text):
+                for run in para.runs:
+                    if pattern.search(run.text):
+                        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                        comment_run = para.add_run(f" {comment_text}")
+                        comment_run.italic = True
+                        comment_run.font.size = Pt(10)
+                        updated = True
+
+    if updated:
+        doc.save(output_path)
+    return updated
+
+
+
 
 # ----------------- Gemini Call -----------------
 def call_gemini_combined(user_docs: str, references: str) -> str:
@@ -170,7 +215,25 @@ def review_documents(filepaths: List[str]) -> str:
     # Single Gemini call
     issues_json = call_gemini_combined(combined_text, references_combined)
 
-    return issues_json
+    # return issues_json
+    import re
+    try:
+        cleaned = issues_json.strip()
+
+        # If wrapped in ```json ... ``` or ``` ... ```
+        if cleaned.startswith("```"):
+            # Remove starting triple backticks and optional 'json'
+            cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+            # Remove trailing triple backticks
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+
+        return json.loads(cleaned.strip())
+
+    except json.JSONDecodeError:
+        return {"error": "Invalid JSON response from Gemini.", "raw_output": issues_json}
+
+
+
 
 
 if __name__ == "__main__":
