@@ -59,6 +59,11 @@ This project provides a streamlit-based UI for uploading multiple documents (.do
     python -m streamlit run streamlit_frontend/app.py
     ```
 
+5. Download the zip of the edited documents
+   You can go through them to see where to make changes
+
+   <img src="./media/prompt.png" alt="App Preview" width="350" />
+
 
 
 ## Common Errors
