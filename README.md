@@ -7,8 +7,8 @@
 ```
 ai-engineer-task-vedanshbvb/
 │
-├── streamlit_frontend/                          # Gradio UI code
-│   ├── app.py                          # Main Gradio app
+├── streamlit_frontend/                          # Streamlit UI code
+│   ├── app.py                          # Main Streamlit app
 │   └── __init__.py
 │
 ├── backend/                           # LangChain & RAG logic
