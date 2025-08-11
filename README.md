@@ -65,6 +65,12 @@ This project provides a streamlit-based UI for uploading multiple documents (.do
    <img src="./media/interface.png" alt="App Preview" width="350" />
    <img src="./media/edited_document.png" alt="App Preview" width="350" />
 
+6. Submission checklist
+   Github repo: https://github.com/2CentsCapitalHR/ai-engineer-task-vedanshbvb  
+   README: https://github.com/2CentsCapitalHR/ai-engineer-task-vedanshbvb/blob/main/README.md   
+   Example documents: 'Articles of Association BEFORE.docx' and 'Articles of Association AFTER.docx'   
+   Structured output file: 'output.json'   
+   Screenshots added above
 
 
 ## Common Errors
