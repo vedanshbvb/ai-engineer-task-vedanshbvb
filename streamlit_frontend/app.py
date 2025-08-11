@@ -79,8 +79,41 @@ if st.button("Review Documents"):
                             use_container_width=True
                         )
 
-        # Step 4: Show detected issues & suggestions
-        st.subheader("Detected Issues & Suggestions")
+        # Step 4: Issue Report
+        if isinstance(result, dict) and result.get("issues_found"):
+            issues = result["issues_found"]
+
+            # Count by severity
+            severity_counts = {"Low": 0, "Medium": 0, "High": 0}
+            severity_map = {"Low": [], "Medium": [], "High": []}
+
+            for issue in issues:
+                sev = issue.get("severity", "").capitalize()
+                if sev in severity_counts:
+                    severity_counts[sev] += 1
+                    severity_map[sev].append(issue)
+
+            st.subheader("📊 Issue Report")
+            st.write(
+                f"**High Severity Issues:** {severity_counts['High']} | "
+                f"**Medium:** {severity_counts['Medium']} | "
+                f"**Low:** {severity_counts['Low']}"
+            )
+
+            for sev in ["High", "Medium", "Low"]:
+                if severity_map[sev]:
+                    with st.expander(f"{sev} Severity Issues ({severity_counts[sev]})"):
+                        for issue in severity_map[sev]:
+                            st.markdown(
+                                f"**Document:** {issue['document']}  \n"
+                                f"**Section:** {issue.get('section', 'N/A')}  \n"
+                                f"**Issue:** {issue['issue']}  \n"
+                                f"**Suggestion:** {issue['suggestion']}"
+                            )
+                            st.markdown("---")
+
+        # Step 5: Show full detected issues dictionary
+        st.subheader("Detected Issues & Suggestions (Full JSON)")
         st.json(result)
 
         status.info("✅ Your documents have been edited and are ready for download.")
