@@ -1,36 +1,29 @@
 import os
-from typing import List
+from typing import List, Tuple
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document
-from langchain.prompts import PromptTemplate
-
 from docx import Document as DocxDocument
 import PyPDF2
-
 from google import genai
 from google.genai import types
-
 from dotenv import load_dotenv
-load_dotenv()
 
+load_dotenv()
 
 VECTORSTORE_PATH = os.path.join("data", "vectorstore")
 
 # ----------------- Load FAISS -----------------
 def load_faiss_vectorstore():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    # return FAISS.load_local(VECTORSTORE_PATH, embeddings)
     return FAISS.load_local(VECTORSTORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
-
 # ----------------- Extractors -----------------
-def extract_text_from_docx(path):
+def extract_text_from_docx(path) -> str:
     doc = DocxDocument(path)
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
-def extract_text_from_pdf(path):
+def extract_text_from_pdf(path) -> str:
     text = ""
     with open(path, "rb") as f:
         reader = PyPDF2.PdfReader(f)
@@ -38,78 +31,102 @@ def extract_text_from_pdf(path):
             text += page.extract_text() or ""
     return text
 
-def chunk_text(text, chunk_size=800, chunk_overlap=100):
+# ----------------- Chunk Helper -----------------
+def chunk_text(text: str, chunk_size=800, chunk_overlap=100):
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     return splitter.split_text(text)
 
 # ----------------- Gemini Call -----------------
-def call_gemini(user_chunk, references):
+def call_gemini_combined(user_docs: str, references: str) -> str:
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     model = "gemini-2.0-flash"
 
-    prompt = (
-        f"""
-        You are a compliance assistant. Compare the following user document chunk to the reference clauses below. 
-        Identify what is the type of ADGM(Abu Dhabi Global Market) document the user has sent (for example, application form, mou) and also identify what is the user trying to do, for example, company formation, employment contract etc etc. What other documents does the user need to provide to complete the process? 
+    prompt = f"""
+    You are a compliance assistant. Compare the following user document chunk to the reference clauses below. 
+    Identify what is the type of ADGM(Abu Dhabi Global Market) document the user has sent (for example, application form, mou) and also identify what is the user trying to do, for example, company formation, employment contract etc etc. What other documents does the user need to provide to complete the process? 
 
-        
-        For example, if a user wants to form a company, they will need the following documents:
-        1. Articles of Association
-        2. Memorandum of Association
-        3. Board Resolution
-        4. Shareholder Resolution
-        5. Incorporation Application Form
-        6. UBO Declaration form
-        7. Register of Members and Directors
-        8. Change of Registered Address Notice
-        
+    You must:
+    1. Identify the legal process they are trying to complete.
+    2. Identify the type of each document uploaded.
+    3. Compare the uploaded documents with the required ADGM checklist for that process.
+    4. List missing documents, if any.
+    5. Detect compliance issues, red flags, or ADGM violations.
+    6. Suggest fixes.
 
-        Be concise and specific.\n\n
-        User Document Chunk:\n{user_chunk}\n\n
-        Reference Clauses:\n{references}\n\n
+    
+    For example, if a user wants to form a company, they will need the following documents:
+    1. Articles of Association
+    2. Memorandum of Association
+    3. Board Resolution
+    4. Shareholder Resolution
+    5. Incorporation Application Form
+    6. UBO Declaration form
+    7. Register of Members and Directors
+    8. Change of Registered Address Notice
+    
 
-        Identify any compliance issues, missing elements or documents such as these:
+    Identify any compliance issues, missing elements or documents such as these:
 
-        Red Flag Detection Features
-            • Invalid or missing clauses
-            • Incorrect jurisdiction (e.g., referencing UAE Federal Courts instead of ADGM)
-            • Ambiguous or non-binding language
-            • Missing signatory sections or improper formatting
-            • Non-compliance with ADGM-specific templates
-            • Missing documents
+    Red Flag Detection Features
+        • Invalid or missing clauses
+        • Incorrect jurisdiction (e.g., referencing UAE Federal Courts instead of ADGM)
+        • Ambiguous or non-binding language
+        • Missing signatory sections or improper formatting
+        • Non-compliance with ADGM-specific templates
+        • Missing documents
 
-        So you must identify missing documents, issues in the user documents, their severity and your suggestion to fix it.
+    So you must identify missing documents, issues in the user documents, their severity and your suggestion to fix it.
 
-        Your answer must STRICTLY be in json format
-        For example:
+    Your answer must STRICTLY be in json format:
+    {{
+        "process": "<string>",
+        "documents_uploaded": <int>,
+        "required_documents": <int>,
+        "missing_document": "<string or list>",
+        "issues_found": [
             {{
-                "process": "Company Incorporation",
-                "documents_uploaded": 4,
-                "required_documents": 5,
-                "missing_document": "Register of Members and Directors",
-                "issues_found": 
-                [
-                    {{
-                        "document": "Articles of Association",
-                        "section": "Clause 3.1",
-                        "issue": "Jurisdiction clause does not specify ADGM",
-                        "severity": "High",
-                        "suggestion": "Update jurisdiction to ADGM Courts."
-                    }}
-                ]
+                "document": "<string>",
+                "section": "<string or null>",
+                "issue": "<string>",
+                "severity": "<Low/Medium/High>",
+                "suggestion": "<string>"
             }}
-        """
+        ]
+    }}
 
 
 
-    )
+    For example:
+        {{
+            "process": "Company Incorporation",
+            "documents_uploaded": 4,
+            "required_documents": 5,
+            "missing_document": "Register of Members and Directors",
+            "issues_found": 
+            [
+                {{
+                    "document": "Articles of Association",
+                    "section": "Clause 3.1",
+                    "issue": "Jurisdiction clause does not specify ADGM",
+                    "severity": "High",
+                    "suggestion": "Update jurisdiction to ADGM Courts."
+                }}
+            ]
+        }}
 
-    contents = [
-        types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=prompt)],
-        )
-    ]
+    User Documents:
+    {user_docs}
+
+    Reference Clauses:
+    {references}
+
+
+    """
+
+
+
+
+    contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
 
     response_text = ""
     for chunk in client.models.generate_content_stream(model=model, contents=contents):
@@ -120,8 +137,9 @@ def call_gemini(user_chunk, references):
 # ----------------- Main Review -----------------
 def review_documents(filepaths: List[str]) -> str:
     vectorstore = load_faiss_vectorstore()
-    all_issues = []
+    all_texts: List[Tuple[str, str]] = []
 
+    # Extract all docs fully
     for path in filepaths:
         ext = os.path.splitext(path)[1].lower()
         if ext == ".docx":
@@ -129,13 +147,33 @@ def review_documents(filepaths: List[str]) -> str:
         elif ext == ".pdf":
             text = extract_text_from_pdf(path)
         else:
-            continue  # skip unsupported
+            continue
+        all_texts.append((os.path.basename(path), text))
 
+    if not all_texts:
+        return "No supported files uploaded."
+
+    # Build combined text for Gemini
+    combined_text = ""
+    for fname, text in all_texts:
+        combined_text += f"\n### Document: {fname}\n{text}\n"
+
+    # RAG: collect relevant references using first chunk of each doc
+    ref_texts = []
+    for _, text in all_texts:
         chunks = chunk_text(text)
-        for chunk in chunks:
-            retrieved_docs = vectorstore.similarity_search(chunk, k=3)
-            references = "\n---\n".join([doc.page_content for doc in retrieved_docs])
-            issues = call_gemini(chunk, references)
-            all_issues.append(f"File: {os.path.basename(path)}\nChunk:\n{chunk[:200]}...\n{issues}\n")
+        if chunks:
+            docs = vectorstore.similarity_search(chunks[0], k=3)
+            ref_texts.extend([doc.page_content for doc in docs])
+    references_combined = "\n---\n".join(list(set(ref_texts)))  # deduplicate
 
-    return "\n\n".join(all_issues) if all_issues else "No issues detected or no supported files uploaded."
+    # Single Gemini call
+    issues_json = call_gemini_combined(combined_text, references_combined)
+
+    return issues_json
+
+
+if __name__ == "__main__":
+    files = ["sample1.docx", "sample2.pdf"]  # replace with actual uploads
+    output = review_documents(files)
+    print(output)
