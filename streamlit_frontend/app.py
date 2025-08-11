@@ -58,11 +58,25 @@ if st.button("Review Documents"):
                     )
 
                     filename_no_ext = Path(filepath).stem.lower()
+                    # file_issues = [
+                    #     i for i in result["issues_found"]
+                    #     if filename_no_ext in i.get("document", "").replace(" ", "_").lower()
+                    #     or i.get("document", "").lower() in filename_no_ext
+                    # ]
+
+                    # file_issues = [
+                    #     i for i in result["issues_found"]
+                    #     if filename_no_ext in str(i.get("document") or "").replace(" ", "_").lower()
+                    #     or str(i.get("document") or "").lower() in filename_no_ext
+                    # ]
+
                     file_issues = [
                         i for i in result["issues_found"]
-                        if filename_no_ext in i.get("document", "").replace(" ", "_").lower()
-                        or i.get("document", "").lower() in filename_no_ext
+                        if i.get("document", "").lower().replace(" ", "") in filename_no_ext.replace(" ", "")
+                        or filename_no_ext.replace(" ", "") in i.get("document", "").lower().replace(" ", "")
                     ]
+
+
 
                     highlighted = highlight_and_comment_docx(filepath, reviewed_path, file_issues)
 

@@ -41,49 +41,155 @@ def chunk_text(text: str, chunk_size=800, chunk_overlap=100):
     return splitter.split_text(text)
 
 # ----------------- Editing user docs -----------------
+import re
+from docx import Document as DocxDocument
+from docx.shared import Pt
+from docx.enum.text import WD_COLOR_INDEX
+
+
+
+
+# def highlight_and_comment_docx(input_path: str, output_path: str, issues: list):
+#     """
+#     Improved: Highlights and adds inline comments to a DOCX file based on issues.
+#     - Matches keywords flexibly (section, issue, placeholders from suggestion)
+#     - Case-insensitive
+#     - Falls back to positional matches for vague section names
+#     """
+#     if not issues:
+#         return False
+
+#     doc = DocxDocument(input_path)
+#     updated = False
+
+#     # Helper: highlight and comment text inside a paragraph
+#     def apply_highlight(para, keyword, comment):
+#         nonlocal updated
+#         pattern = re.compile(re.escape(keyword), re.IGNORECASE)
+#         if keyword.lower() in para.text.lower():
+#             for run in para.runs:
+#                 if pattern.search(run.text):
+#                     run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+#                     comment_run = para.add_run(f" [COMMENT: {comment}]")
+#                     comment_run.italic = True
+#                     comment_run.font.size = Pt(10)
+#                     updated = True
+
+#     for issue in issues:
+#         section = issue.get("section", "").strip()
+#         issue_text = issue.get("issue", "").strip()
+#         suggestion = issue.get("suggestion", "").strip()
+
+#         # Build list of potential keywords to search for
+#         keywords = []
+
+#         # Add section name if it’s specific (not just "General")
+#         if section and section.lower() not in ["general", "header", "signatures", "first paragraph"]:
+#             keywords.append(section)
+
+#         # Add placeholders from suggestion/issue if any
+#         placeholder_match = re.findall(r"\{[^}]+\}", suggestion + " " + issue_text)
+#         keywords.extend([ph for ph in placeholder_match])
+
+#         # Add short words from issue text that might appear in doc
+#         if not placeholder_match and issue_text:
+#             words = [w for w in issue_text.split() if len(w) > 4]  # skip very short words
+#             keywords.extend(words[:3])  # limit to first few
+
+#         matched = False
+
+#         # 1️⃣ Keyword-based highlighting
+#         for para in doc.paragraphs:
+#             for kw in keywords:
+#                 if kw and kw.lower() in para.text.lower():
+#                     apply_highlight(para, kw, suggestion)
+#                     matched = True
+
+#         # 2️⃣ Positional fallback for vague section labels
+#         if not matched:
+#             if section.lower() == "header" and doc.paragraphs:
+#                 apply_highlight(doc.paragraphs[0], doc.paragraphs[0].text, suggestion)
+
+#             elif section.lower() == "first paragraph" and len(doc.paragraphs) > 1:
+#                 apply_highlight(doc.paragraphs[1], doc.paragraphs[1].text, suggestion)
+
+#             elif section.lower() == "signatures":
+#                 for para in doc.paragraphs[-5:]:  # look in last 5 paragraphs
+#                     if "sign" in para.text.lower() or "signature" in para.text.lower():
+#                         apply_highlight(para, para.text, suggestion)
+
+#     # Always save, even if no highlights
+#     doc.save(output_path)
+#     return updated
+
+
 def highlight_and_comment_docx(input_path: str, output_path: str, issues: list):
     """
-    Highlights and adds inline comments to a DOCX file wherever issues are found.
-    Saves the updated document to output_path.
-    Matching is case-insensitive and allows partial matches.
+    Highlights and adds inline comments to a DOCX file based on issues.
+    - Exact match for section: "5. Governing Laws" OR "Governing Laws"
+    - If section is 'General', just add comment at the end (no highlights)
+    - Always saves the file even if no highlights
     """
-    print("one")
-
     if not issues:
-        print("two")
+        doc = DocxDocument(input_path)
+        doc.save(output_path)
         return False
-    
-    print("three")
 
     doc = DocxDocument(input_path)
     updated = False
 
+    def apply_highlight(para, keyword, comment):
+        """Highlight if exact match found, then add comment once."""
+        nonlocal updated
+        if keyword.lower() in para.text.lower():
+            # Exact match check: full section or section without numbering
+            section_plain = re.sub(r"^\d+\.\s*", "", keyword, flags=re.IGNORECASE).strip().lower()
+            para_plain = para.text.lower()
+
+            if section_plain in para_plain or keyword.lower() in para_plain:
+                # Highlight
+                for run in para.runs:
+                    if section_plain in run.text.lower() or keyword.lower() in run.text.lower():
+                        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                # Add comment if not already there
+                if not any("[COMMENT:" in r.text for r in para.runs):
+                    comment_run = para.add_run(f" [COMMENT: {comment}]")
+                    comment_run.italic = True
+                    comment_run.font.size = Pt(10)
+                updated = True
+
     for issue in issues:
-        keyword = issue.get("section") or issue.get("issue")
-        if not keyword:
+        section = issue.get("section", "").strip()
+        suggestion = issue.get("suggestion", "").strip()
+
+        # If section is "General" → append comment at the end
+        if section.lower() == "general":
+            end_para = doc.add_paragraph(f"[COMMENT: {suggestion}]")
+            end_para.italic = True
+            end_para.font.size = Pt(10)
+            updated = True
             continue
 
-        # Build comment text
-        comment_text = f"[COMMENT: {issue.get('suggestion', '')}]"
+        # Try to match full section (e.g., "5. Governing Laws") or without number
+        section_no_number = re.sub(r"^\d+\.\s*", "", section, flags=re.IGNORECASE).strip()
 
-        # Case-insensitive keyword search in paragraphs
-        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-
+        matched = False
         for para in doc.paragraphs:
-            if pattern.search(para.text):
-                for run in para.runs:
-                    if pattern.search(run.text):
-                        run.font.highlight_color = WD_COLOR_INDEX.YELLOW
-                        comment_run = para.add_run(f" {comment_text}")
-                        comment_run.italic = True
-                        comment_run.font.size = Pt(10)
-                        updated = True
+            if section and (
+                section.lower() in para.text.lower() or
+                section_no_number.lower() in para.text.lower()
+            ):
+                apply_highlight(para, section, suggestion)
+                matched = True
 
-    print("4")
+        # Positional fallback for signatures
+        if not matched and section.lower() == "signatures":
+            for para in doc.paragraphs[-5:]:
+                if "sign" in para.text.lower() or "signature" in para.text.lower():
+                    apply_highlight(para, para.text, suggestion)
 
-    if updated:
-        print("5")
-        doc.save(output_path)
+    # Always save, even if nothing matched
+    doc.save(output_path)
     return updated
 
 
@@ -119,7 +225,7 @@ def call_gemini_combined(user_docs: str, references: str) -> str:
     Red Flag Detection Features
         • Invalid or missing clauses
         • Incorrect jurisdiction (e.g., referencing UAE Federal Courts instead of ADGM)
-        • Ambiguous or non-binding language like "today", "tomorrow", "maybe" 
+        • Ambiguous or non-binding language like "today", "tomorrow", "maybe", "monday", "this week"
         • Missing signatory sections or improper formatting
         • Non-compliance with ADGM-specific templates
         • Missing documents
@@ -130,7 +236,6 @@ def call_gemini_combined(user_docs: str, references: str) -> str:
 
     Your answer must STRICTLY be in json format:
     {{
-        "process": "<string>",
         "issues_found": [
             {{
                 "document": "<string>",
@@ -146,18 +251,20 @@ def call_gemini_combined(user_docs: str, references: str) -> str:
 
     For example:
         {{
-            "process": "Company Incorporation",
             "issues_found": 
             [
                 {{
                     "document": "UBO Declaration form",
-                    "section": "Clause 3.1",
+                    "section": "1. Governing Laws",
                     "issue": "Jurisdiction clause does not specify ADGM",
                     "severity": "High",
                     "suggestion": "Update jurisdiction to ADGM Courts."
                 }}
             ]
         }}
+
+    The section should be a number followed by the name of the section
+    NO value should ever be Null!
 
     User Documents:
     {user_docs}
